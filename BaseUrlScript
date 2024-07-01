@@ -1,0 +1,69 @@
+# Define the path to the input and output files
+$inputFilePath = ".\input.txt"
+
+# Function to extract base URL from a full URL using regex and remove the protocol and www
+function Get-BaseUrl {
+    param (
+        [string]$url
+    )
+    if ($url -match "^(http|https):\/\/([^\/\s]+)|^www\.([^\/\s]+)") {
+        if ($matches[2]) {
+            return $matches[2].Trim()  # For http or https URLs
+        } elseif ($matches[3]) {
+            return $matches[3].Trim()  # For www URLs
+        }
+    } else {
+        Write-Output "Invalid URL: $url"
+        return $null
+    }
+}
+
+# Read the content of the input file line by line
+$lines = Get-Content -Path $inputFilePath
+
+# Initialize arrays to store base URLs and original lines
+$baseUrls = @()
+$originalLines = @()
+
+# Initialize a counter for debug output
+$lineCount = 0
+$matchCount = 0
+$invalidCount = 0
+
+# Process each line to extract URLs
+foreach ($line in $lines) {
+    $lineCount++
+    $urlPattern = "(http|https):\/\/[^\/\s]+|www\.[^\/\s]+"
+    $matches = [regex]::matches($line, $urlPattern)
+    foreach ($match in $matches) {
+        $matchCount++
+        $baseUrl = Get-BaseUrl -url $match.Value
+        if ($baseUrl -ne $null) {
+            $baseUrls += $baseUrl
+            $originalLines += $line
+        } else {
+            $invalidCount++
+        }
+    }
+}
+
+# Output debug information
+Write-Output "Total lines processed: $lineCount"
+Write-Output "Total matches found: $matchCount"
+Write-Output "Total invalid URLs: $invalidCount"
+
+# Remove duplicates and sort the base URLs
+$baseUrls = $baseUrls | Sort-Object -Unique
+
+# Output the count of unique base URLs for debugging
+Write-Output "Total unique base URLs: $($baseUrls.Count)"
+
+# Generate the content for each of the three files
+$elasticFilterQuery = $baseUrls -join ', '
+$kqlQueryReady = ($baseUrls | ForEach-Object { "url.domain: `"$($_)`"" }) -join " or `n"
+$domainsList = $baseUrls -join "`n"
+
+# Write the content to the respective files
+$elasticFilterQuery | Out-File -FilePath "Elastic_Filter_query.txt"
+$kqlQueryReady | Out-File -FilePath "KQL_query_ready.txt"
+$domainsList | Out-File -FilePath "domains_list.txt"
