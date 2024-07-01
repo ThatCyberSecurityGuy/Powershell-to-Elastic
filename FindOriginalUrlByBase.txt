@@ -1,0 +1,105 @@
+# Define the path to the input and output files
+$baseDomainsFilePath = ".\Domains_list.txt"
+$fullDomainsFilePath = ".\input.txt"
+
+# Function to read domains from a text file
+function Get-Domains {
+    param (
+        [string]$filePath
+    )
+    $domains = Get-Content -Path $filePath
+    return $domains | Sort-Object -Unique
+}
+
+# Function to extract base URL from a full URL using regex and remove the protocol and www
+function Get-BaseUrl {
+    param (
+        [string]$url
+    )
+    if ($url -match "^(http|https):\/\/([^\/\s]+)|^www\.([^\/\s]+)") {
+        if ($matches[2]) {
+            return $matches[2].Trim()  # For http or https URLs
+        } elseif ($matches[3]) {
+            return $matches[3].Trim()  # For www URLs
+        }
+    } else {
+        Write-Output "Invalid URL: $url"
+        return $null
+    }
+}
+
+# Function to match base domains to full domains
+function Match-FullDomains {
+    param (
+        [string[]]$baseDomains,
+        [string[]]$fullDomains
+    )
+    $matchedFullDomains = @()
+    foreach ($fullDomain in $fullDomains) {
+        $baseUrl = Get-BaseUrl -url $fullDomain
+        if ($baseUrl -ne $null) {
+            if ($baseDomains -contains $baseUrl) {
+                $matchedFullDomains += $fullDomain
+            }
+        }
+    }
+    return $matchedFullDomains | Sort-Object -Unique
+}
+
+# Initialize arrays to store base URLs and original lines
+$baseUrls = @()
+$originalLines = @()
+
+# Initialize a counter for debug output
+$lineCount = 0
+$matchCount = 0
+$invalidCount = 0
+
+# Read the full domains from the full domains file
+$fullDomains = Get-Content -Path $fullDomainsFilePath
+
+# Process each line to extract URLs
+foreach ($line in $fullDomains) {
+    $lineCount++
+    $urlPattern = "(http|https):\/\/[^\/\s]+|www\.[^\/\s]+"
+    $matches = [regex]::matches($line, $urlPattern)
+    foreach ($match in $matches) {
+        $matchCount++
+        $baseUrl = Get-BaseUrl -url $match.Value
+        if ($baseUrl -ne $null) {
+            $baseUrls += $baseUrl
+            $originalLines += $line
+        } else {
+            $invalidCount++
+        }
+    }
+}
+
+# Output debug information
+Write-Output "Total lines processed: $lineCount"
+Write-Output "Total matches found: $matchCount"
+Write-Output "Total invalid URLs: $invalidCount"
+
+# Remove duplicates and sort the base URLs
+$baseUrls = $baseUrls | Sort-Object -Unique
+
+# Output the count of unique base URLs for debugging
+Write-Output "Total unique base URLs: $($baseUrls.Count)"
+
+# Read the base domains from the base domains file
+$baseDomains = Get-Domains -filePath $baseDomainsFilePath
+
+# Match the base domains to the full domains
+$matchedFullDomains = Match-FullDomains -baseDomains $baseDomains -fullDomains $fullDomains
+
+# Generate the content for each of the three files
+$elasticFilterQuery = $matchedFullDomains -join ', '
+$kqlQueryReady = ($matchedFullDomains | ForEach-Object { "url.original: `"$($_)`"" }) -join " or `n"
+$domainsList = $matchedFullDomains -join "`n"
+
+# Write the content to the respective files
+$elasticFilterQuery | Out-File -FilePath ".\Elastic_Filter_query.txt"
+$kqlQueryReady | Out-File -FilePath ".\KQL_query_ready.txt"
+$domainsList | Out-File -FilePath ".\url_orignal_list.txt"
+
+Write-Output "Matched full domains have been written to the output files."
