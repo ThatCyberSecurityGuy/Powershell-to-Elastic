@@ -29,6 +29,7 @@ $originalLines = @()
 $lineCount = 0
 $matchCount = 0
 $invalidCount = 0
+$duplicateCount = 0
 
 # Process each line to extract URLs
 foreach ($line in $lines) {
@@ -39,8 +40,12 @@ foreach ($line in $lines) {
         $matchCount++
         $baseUrl = Get-BaseUrl -url $match.Value
         if ($baseUrl -ne $null) {
-            $baseUrls += $baseUrl
-            $originalLines += $line
+            if ($baseUrls -contains $baseUrl) {
+                $duplicateCount++
+            } else {
+                $baseUrls += $baseUrl
+                $originalLines += $line
+            }
         } else {
             $invalidCount++
         }
@@ -51,6 +56,7 @@ foreach ($line in $lines) {
 Write-Output "Total lines processed: $lineCount"
 Write-Output "Total matches found: $matchCount"
 Write-Output "Total invalid URLs: $invalidCount"
+Write-Output "Total duplicates discovered: $duplicateCount"
 
 # Remove duplicates and sort the base URLs
 $baseUrls = $baseUrls | Sort-Object -Unique
