@@ -35,14 +35,22 @@ function Match-FullDomains {
         [string[]]$fullDomains
     )
     $matchedFullDomains = @()
+    $fullDomainDuplicates = 0
+    $processedFullDomains = @()
     foreach ($fullDomain in $fullDomains) {
         $baseUrl = Get-BaseUrl -url $fullDomain
         if ($baseUrl -ne $null) {
             if ($baseDomains -contains $baseUrl) {
-                $matchedFullDomains += $fullDomain
+                if ($processedFullDomains -contains $fullDomain) {
+                    $fullDomainDuplicates++
+                } else {
+                    $matchedFullDomains += $fullDomain
+                    $processedFullDomains += $fullDomain
+                }
             }
         }
     }
+    Write-Output "Total duplicate original URLs discovered: $fullDomainDuplicates"
     return $matchedFullDomains | Sort-Object -Unique
 }
 
@@ -54,6 +62,7 @@ $originalLines = @()
 $lineCount = 0
 $matchCount = 0
 $invalidCount = 0
+$baseUrlDuplicates = 0
 
 # Read the full domains from the full domains file
 $fullDomains = Get-Content -Path $fullDomainsFilePath
@@ -67,6 +76,9 @@ foreach ($line in $fullDomains) {
         $matchCount++
         $baseUrl = Get-BaseUrl -url $match.Value
         if ($baseUrl -ne $null) {
+            if ($baseUrls -contains $baseUrl) {
+                $baseUrlDuplicates++
+            }
             $baseUrls += $baseUrl
             $originalLines += $line
         } else {
@@ -79,6 +91,7 @@ foreach ($line in $fullDomains) {
 Write-Output "Total lines processed: $lineCount"
 Write-Output "Total matches found: $matchCount"
 Write-Output "Total invalid URLs: $invalidCount"
+Write-Output "Total duplicate base URLs discovered: $baseUrlDuplicates"
 
 # Remove duplicates and sort the base URLs
 $baseUrls = $baseUrls | Sort-Object -Unique
